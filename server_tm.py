@@ -39,7 +39,7 @@ class ServerProtocol(LineOnlyReceiver):
     def send_history(self):
         if len(self.factory.last_messages) > 0:
             for i in self.factory.last_messages:
-                self.sendLine(f"Old {i}".encode())
+                self.sendLine(f"Old {i}".encode(encoding="ISO-8859-1"))
         elif len(self.factory.last_messages) == 0:
             self.sendLine("Be the first one to leave a message :)".encode())
 
@@ -56,7 +56,7 @@ class ServerProtocol(LineOnlyReceiver):
             self.factory.logins.append(self.login)
             self.send_history()
         elif self.login in self.factory.logins:
-            self.sendLine(f"Login {self.login} is already taken, please try again".encode())
+            self.sendLine(f"Login {self.login} is already taken, please try again".encode(encoding="ISO-8859-1"))
             self.login = None
             self.transport.loseConnection()
 
@@ -71,7 +71,7 @@ class ServerProtocol(LineOnlyReceiver):
             self.login = None
 
     def lineReceived(self, line: bytes):
-        content = line.decode(errors="ignore")
+        content = line.decode(encoding="ISO-8859-1", errors="ignore")
 
         if self.login is not None:
             content = f"Message from {self.login}: {content}"
@@ -79,7 +79,7 @@ class ServerProtocol(LineOnlyReceiver):
 
             for user in self.factory.clients:
                 if user is not self:
-                    user.sendLine(content.encode())
+                    user.sendLine(content.encode(encoding="ISO-8859-1"))
         else:
             # login:admin -> admin
             if content.startswith("login:"):

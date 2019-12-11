@@ -11,12 +11,13 @@ from twisted.internet import reactor
 from twisted.internet.protocol import ServerFactory, connectionDone
 from twisted.protocols.basic import LineOnlyReceiver
 
-# Вне заданий: добавлены методы __init__; добавлено приветствие на сервере; не понято, что за потенциальный баг :D
-# Задание 1. Аналогично спсику клиентов, создан список логинов на сервере, строки 61-71 проверяют логин.
-#            Ещё был вариант создать глобальную-глобальную переменную "logins = []"
+# Вне заданий: добавлены методы __init__; добавлено приветствие на сервере; добавлена проверка логина на
+#              пустые строки и пробелы - check_login; не очень понято, что за потенциальный баг :D
+# Задание 1. Аналогично списку клиентов, создан список логинов на сервере, функция check_login_redundancy
+#            проверяет логин на уникальность. Ещё был вариант создать глобальную-глобальную переменную "logins = []"
 # Задание 2. Аналогично списку клиентов, создан список последних сообщений на сервере.
-#            Функция send_history (строки 37-42) выдаёт старые сообщения или предлагает быть первым.
-#            На строках 50-54 список с последними сообщениями пополняется и очищается от слишком старых.
+#            Функция send_history выдаёт старые сообщения или предлагает быть первым.
+#            Функция save_last_message пополняет новыми и очищает от слишком старых список с последними сообщениями.
 
 
 class ServerProtocol(LineOnlyReceiver):
@@ -30,6 +31,7 @@ class ServerProtocol(LineOnlyReceiver):
         # "Потенциальный баг для внимательных =)" - это про отсутствие __init__ или про само вызывание "глобального" списка клиентов из сервера?
         self.factory.clients.append(self)
         self.sendLine("Hello there! Enter your login as \"login:<your_login>\" to start chatting.".encode())
+        self.sendLine("WARNING: only latin symbols are allowed.".encode())
 
     def connectionLost(self, reason=connectionDone):
         self.factory.clients.remove(self)
@@ -41,17 +43,40 @@ class ServerProtocol(LineOnlyReceiver):
         elif len(self.factory.last_messages) == 0:
             self.sendLine("Be the first one to leave a message :)".encode())
 
+    def save_last_messages(self, content):
+        if len(self.factory.last_messages) < 10:
+            self.factory.last_messages.append(content)
+        elif len(self.factory.last_messages) >= 10:
+            self.factory.last_messages.append(content)
+            self.factory.last_messages = self.factory.last_messages[1:]
+
+    def check_login_redundancy(self):
+        if self.login not in self.factory.logins:
+            self.sendLine("Welcome!".encode())
+            self.factory.logins.append(self.login)
+            self.send_history()
+        elif self.login in self.factory.logins:
+            self.sendLine(f"Login {self.login} is already taken, please try again".encode())
+            self.login = None
+            self.transport.loseConnection()
+
+    def check_login(self):
+        print(self.login)
+        if " " in str(self.login):
+            self.sendLine("Invalid login: login should not contain spaces. Please try again.".encode())
+            self.login = None
+        elif str(self.login):
+            self.check_login_redundancy()
+        elif not self.login:
+            self.sendLine("Invalid login: login should not be empty. Please try again.".encode())
+            self.login = None
+
     def lineReceived(self, line: bytes):
         content = line.decode()
 
         if self.login is not None:
             content = f"Message from {self.login}: {content}"
-
-            if len(self.factory.last_messages) < 10:
-                self.factory.last_messages.append(content)
-            elif len(self.factory.last_messages) >= 10:
-                self.factory.last_messages.append(content)
-                self.factory.last_messages = self.factory.last_messages[1:]
+            self.save_last_messages(content)
 
             for user in self.factory.clients:
                 if user is not self:
@@ -60,19 +85,10 @@ class ServerProtocol(LineOnlyReceiver):
             # login:admin -> admin
             if content.startswith("login:"):
                 self.login = content.replace("login:", "")
-
-                if self.login not in self.factory.logins:
-                    self.sendLine("Welcome!".encode())
-                    self.factory.logins.append(self.login)
-                    self.send_history()
-                elif self.login in self.factory.logins:
-                    self.sendLine(f"Login {self.login} is already taken, please try again".encode())
-                    self.login = None
-                    self.transport.loseConnection()
-
+                self.check_login()
             else:
                 self.sendLine("Invalid login, try again.".encode())
-
+                self.login = None
 
 class Server(ServerFactory):
     protocol = ServerProtocol

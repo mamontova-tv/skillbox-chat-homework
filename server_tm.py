@@ -61,7 +61,6 @@ class ServerProtocol(LineOnlyReceiver):
             self.transport.loseConnection()
 
     def check_login(self):
-        print(self.login)
         if " " in str(self.login):
             self.sendLine("Invalid login: login should not contain spaces. Please try again.".encode())
             self.login = None
@@ -72,7 +71,7 @@ class ServerProtocol(LineOnlyReceiver):
             self.login = None
 
     def lineReceived(self, line: bytes):
-        content = line.decode()
+        content = line.decode(errors="ignore")
 
         if self.login is not None:
             content = f"Message from {self.login}: {content}"
